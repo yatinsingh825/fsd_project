@@ -33,7 +33,7 @@ const GlobalStyles = () => (
     }
     
     .light .aurora-background {
-      background: #f0f9ff;
+      background: #f3f4f6;
     }
 
     .aurora-background::before,
@@ -66,7 +66,7 @@ const GlobalStyles = () => (
       background: radial-gradient(circle, #a5b4fc, transparent 40%);
       top: -30vmax;
       left: -30vmax;
-      opacity: 0.4;
+      opacity: 0.3;
     }
     
     .light .aurora-background::after {
@@ -74,7 +74,7 @@ const GlobalStyles = () => (
       bottom: -30vmax;
       right: -30vmax;
       animation-delay: 5s;
-      opacity: 0.4;
+      opacity: 0.3;
     }
 
     @keyframes aurora {
@@ -91,18 +91,77 @@ const ROLES = {
   Viewer: 'Viewer',
 };
 
+// Mock data for Audit Log demonstration
+const MOCK_AUDIT_LOGS = [
+  {
+    _id: '4',
+    type: 'USER_LOGIN',
+    targetUsername: 'editor',
+    timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(), // 1 hour ago
+  },
+  {
+    _id: '1',
+    type: 'ROLE_CHANGE',
+    adminUsername: 'admin',
+    targetUsername: 'editor',
+    oldRole: 'Viewer',
+    newRole: 'Editor',
+    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+  },
+  {
+    _id: '5',
+    type: 'USER_REGISTER',
+    targetUsername: 'newuser2',
+    timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), // 5 hours ago
+  },
+  {
+    _id: '6',
+    type: 'USER_LOGIN',
+    targetUsername: 'admin',
+    timestamp: new Date(Date.now() - 10 * 60 * 60 * 1000).toISOString(), // 10 hours ago
+  },
+  {
+    _id: '2',
+    type: 'ROLE_CHANGE',
+    adminUsername: 'admin',
+    targetUsername: 'newuser',
+    oldRole: 'Editor',
+    newRole: 'Viewer',
+    timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
+  },
+  {
+    _id: '7',
+    type: 'USER_LOGIN',
+    targetUsername: 'viewer',
+    timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days ago
+  },
+  {
+    _id: '3',
+    type: 'ROLE_CHANGE',
+    adminUsername: 'admin',
+    targetUsername: 'anotheruser',
+    oldRole: 'Viewer',
+    newRole: 'Editor',
+    timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
+  },
+];
+
+
 const PERMISSIONS = {
   [ROLES.Admin]: {
     content: ['create', 'read', 'update_all', 'delete_all'],
     users: ['read', 'update', 'delete'],
+    auditlog: ['read'],
   },
   [ROLES.Editor]: {
     content: ['create', 'read', 'update_own', 'delete_own'],
     users: [],
+    auditlog: [],
   },
   [ROLES.Viewer]: {
     content: ['read'],
     users: [],
+    auditlog: [],
   },
 };
 
@@ -201,6 +260,7 @@ const AuthProvider = ({ children }) => {
     };
     localStorage.setItem('auth', JSON.stringify(authData));
     setUser(userData.user);
+    return userData.user; // Return user data for navigation
   };
 
   const logout = async () => {
@@ -254,15 +314,16 @@ const usePermissions = () => {
   const canUpdate = (subject, resource = 'content') => can(`${resource}:update`, subject);
   const canDelete = (subject, resource = 'content') => can(`${resource}:delete`, subject);
   const canManageUsers = () => can('users:read');
+  const canReadAuditLog = () => can('auditlog:read');
 
 
-  return { can, canRead, canCreate, canUpdate, canDelete, canManageUsers, userRole: user?.role, userId: user?.id };
+  return { can, canRead, canCreate, canUpdate, canDelete, canManageUsers, canReadAuditLog, userRole: user?.role, userId: user?.id };
 };
 
 const Layout = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const { canManageUsers } = usePermissions();
+  const { canManageUsers, canReadAuditLog } = usePermissions();
   const { theme, toggleTheme } = useTheme();
 
   const handleLogout = async () => {
@@ -273,7 +334,7 @@ const Layout = () => {
   return (
     <div className="min-h-screen font-sans relative z-10 text-gray-900 dark:text-gray-100">
       <div className="aurora-background" />
-      <nav className="bg-white/10 dark:bg-black/10 shadow-lg border-b border-white/10 dark:border-white/5 backdrop-blur-lg sticky top-0 z-50">
+      <nav className="bg-white dark:bg-black/10 shadow-lg border-b border-gray-200 dark:border-white/5 dark:backdrop-blur-lg sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
@@ -286,8 +347,13 @@ const Layout = () => {
                 Home
               </Link>
               {canManageUsers() && (
-                <Link to="/admin" className="text-gray-800 dark:text-gray-200 hover:text-blue-500 dark:hover:text-blue-400 px-3 py-2 rounded-md text-sm font-medium transition-colors">
-                  Admin Panel
+                <Link to="/admin/users" className="text-gray-800 dark:text-gray-200 hover:text-blue-500 dark:hover:text-blue-400 px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                  User Panel
+                </Link>
+              )}
+              {canReadAuditLog() && (
+                <Link to="/admin/audit" className="text-gray-800 dark:text-gray-200 hover:text-blue-500 dark:hover:text-blue-400 px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                  Audit Log
                 </Link>
               )}
               {user ? (
@@ -304,7 +370,7 @@ const Layout = () => {
                 <>
                   <Link
                     to="/login"
-                    className="text-gray-800 dark:text-gray-200 bg-white/20 dark:bg-black/20 border border-white/20 dark:border-white/10 px-4 py-2 rounded-lg text-sm font-medium hover:bg-white/40 dark:hover:bg-black/40 transition-all duration-300"
+                    className="text-gray-800 dark:text-gray-200 bg-gray-100 dark:bg-black/20 border border-gray-300 dark:border-white/10 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-black/40 transition-all duration-300"
                   >
                     Login
                   </Link>
@@ -318,7 +384,7 @@ const Layout = () => {
               )}
               <button 
                 onClick={toggleTheme} 
-                className="flex items-center justify-center w-10 h-10 rounded-lg bg-white/10 dark:bg-black/20 text-gray-800 dark:text-gray-200 hover:bg-white/20 dark:hover:bg-black/30 transition-colors"
+                className="flex items-center justify-center w-10 h-10 rounded-lg bg-gray-200 dark:bg-black/20 text-gray-800 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-black/30 transition-colors"
                 aria-label="Toggle theme"
               >
                 {theme === 'light' ? 
@@ -380,7 +446,7 @@ const HomePage = () => {
         {content.length > 0 ? content.map((item) => (
           <ContentItem key={item._id} item={item} onDelete={fetchContent} />
         )) : (
-          <p className="text-gray-600 dark:text-gray-400 text-center">No content yet. Be the first to create a post!</p>
+          <p className="text-gray-700 dark:text-gray-400 text-center">No content yet. Be the first to create a post!</p>
         )}
       </div>
     </div>
@@ -418,11 +484,11 @@ const ContentItem = ({ item, onDelete }) => {
   };
 
   return (
-    <div className="bg-white/10 dark:bg-black/10 p-6 rounded-2xl shadow-lg border border-white/20 dark:border-white/10 backdrop-blur-lg transition-all duration-300 hover:shadow-xl">
+    <div className="bg-white dark:bg-black/10 p-6 rounded-2xl shadow-lg border border-gray-200 dark:border-white/10 dark:backdrop-blur-lg transition-all duration-300 hover:shadow-xl">
       <div className="flex justify-between items-start">
         <div>
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 mb-2">{item.title}</h2>
-          <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">By <span className="font-medium text-gray-800 dark:text-gray-200">{item.author.username}</span></p>
+          <p className="text-gray-700 dark:text-gray-400 text-sm mb-4">By <span className="font-medium text-gray-900 dark:text-gray-200">{item.author.username}</span></p>
         </div>
         <div className="flex space-x-2 flex-shrink-0 ml-4">
           {canEdit && (
@@ -453,9 +519,9 @@ const ContentItem = ({ item, onDelete }) => {
 
       {showConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-2xl max-w-sm w-full border border-white/10">
+          <div className="bg-white dark:bg-gray-900 p-8 rounded-2xl shadow-2xl max-w-sm w-full border border-gray-200 dark:border-white/10">
             <h3 className="text-2xl font-bold mb-6 text-center text-gray-900 dark:text-gray-100">Are you sure?</h3>
-            <p className="text-gray-700 dark:text-gray-300 mb-8 text-center">
+            <p className="text-gray-800 dark:text-gray-300 mb-8 text-center">
               Do you really want to delete this post? This action cannot be undone.
             </p>
             <div className="flex justify-around space-x-4">
@@ -480,7 +546,7 @@ const ContentItem = ({ item, onDelete }) => {
 };
 
 const AuthFormWrapper = ({ title, children }) => (
-  <div className="max-w-md mx-auto bg-white/10 dark:bg-black/10 p-8 md:p-10 rounded-2xl shadow-2xl border border-white/20 dark:border-white/10 backdrop-blur-lg">
+  <div className="max-w-md mx-auto bg-white dark:bg-black/10 p-8 md:p-10 rounded-2xl shadow-2xl border border-gray-200 dark:border-white/10 dark:backdrop-blur-lg">
     <h2 className="text-3xl font-bold text-center mb-8 text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-purple-600 dark:from-blue-400 dark:to-purple-500">
       {title}
     </h2>
@@ -500,8 +566,14 @@ const LoginPage = () => {
     setError(null);
     try {
       const { data } = await apiClient.post('/auth/login', { username, password });
-      login(data);
-      navigate('/');
+      const user = login(data); // login now returns the user
+      
+      // Navigate based on role
+      if (user.role === ROLES.Admin) {
+        navigate('/admin/users');
+      } else {
+        navigate('/');
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Invalid username or password.');
       console.error(err);
@@ -526,23 +598,23 @@ const LoginPage = () => {
       <form onSubmit={handleSubmit}>
         {error && <p className="text-red-500 text-center mb-4 text-sm">{error}</p>}
         <div className="mb-4">
-          <label className="block text-gray-800 dark:text-gray-200 mb-2 font-medium" htmlFor="username">Username</label>
+          <label className="block text-gray-900 dark:text-gray-200 mb-2 font-medium" htmlFor="username">Username</label>
           <input
             type="text"
             id="username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="w-full px-4 py-2.5 bg-white/20 dark:bg-black/20 border border-white/30 dark:border-white/10 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-300 transition-all"
+            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-300 transition-all"
           />
         </div>
         <div className="mb-6">
-          <label className="block text-gray-800 dark:text-gray-200 mb-2 font-medium" htmlFor="password">Password</label>
+          <label className="block text-gray-900 dark:text-gray-200 mb-2 font-medium" htmlFor="password">Password</label>
           <input
             type="password"
             id="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-2.5 bg-white/20 dark:bg-black/20 border border-white/30 dark:border-white/10 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-300 transition-all"
+            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-300 transition-all"
           />
         </div>
         <button
@@ -554,7 +626,7 @@ const LoginPage = () => {
       </form>
       
       <div className="mt-8 text-center">
-        <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">Or try a demo user:</p>
+        <p className="text-sm text-gray-900 dark:text-gray-300 mb-4">Or try a demo user:</p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button 
             type="button" 
@@ -580,9 +652,9 @@ const LoginPage = () => {
         </div>
       </div>
 
-      <p className="mt-8 text-center text-sm text-gray-600 dark:text-gray-400">
+      <p className="mt-8 text-center text-sm text-gray-800 dark:text-gray-400">
         Don't have an account?{' '}
-        <Link to="/register" className="font-medium text-blue-500 dark:text-blue-400 hover:text-blue-400 dark:hover:text-blue-300">
+        <Link to="/register" className="font-medium text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">
           Sign Up
         </Link>
       </p>
@@ -593,6 +665,7 @@ const LoginPage = () => {
 const RegisterPage = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState(ROLES.Viewer); // Default to Viewer
   const [error, setError] = useState(null);
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -601,7 +674,7 @@ const RegisterPage = () => {
     e.preventDefault();
     setError(null);
     try {
-      const { data } = await apiClient.post('/auth/register', { username, password });
+      const { data } = await apiClient.post('/auth/register', { username, password, role });
       login(data);
       navigate('/');
     } catch (err) {
@@ -615,24 +688,36 @@ const RegisterPage = () => {
       <form onSubmit={handleSubmit}>
         {error && <p className="text-red-500 text-center mb-4 text-sm">{error}</p>}
         <div className="mb-4">
-          <label className="block text-gray-800 dark:text-gray-200 mb-2 font-medium" htmlFor="username">Username</label>
+          <label className="block text-gray-900 dark:text-gray-200 mb-2 font-medium" htmlFor="username">Username</label>
           <input
             type="text"
             id="username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="w-full px-4 py-2.5 bg-white/20 dark:bg-black/20 border border-white/30 dark:border-white/10 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-300 transition-all"
+            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-300 transition-all"
           />
         </div>
-        <div className="mb-6">
-          <label className="block text-gray-800 dark:text-gray-200 mb-2 font-medium" htmlFor="password">Password</label>
+        <div className="mb-4">
+          <label className="block text-gray-900 dark:text-gray-200 mb-2 font-medium" htmlFor="password">Password</label>
           <input
             type="password"
             id="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-2.5 bg-white/20 dark:bg-black/20 border border-white/30 dark:border-white/10 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-300 transition-all"
+            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-300 transition-all"
           />
+        </div>
+        <div className="mb-6">
+          <label className="block text-gray-900 dark:text-gray-200 mb-2 font-medium" htmlFor="role">Register as</label>
+          <select
+            id="role"
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-300 transition-all"
+          >
+            <option value={ROLES.Viewer}>Viewer</option>
+            <option value={ROLES.Editor}>Editor</option>
+          </select>
         </div>
         <button
           type="submit"
@@ -641,9 +726,9 @@ const RegisterPage = () => {
           Register
         </button>
       </form>
-      <p className="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
+      <p className="mt-6 text-center text-sm text-gray-800 dark:text-gray-400">
         Already have an account?{' '}
-        <Link to="/login" className="font-medium text-blue-500 dark:text-blue-400 hover:text-blue-400 dark:hover:text-blue-300">
+        <Link to="/login" className="font-medium text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300">
           Login
         </Link>
       </p>
@@ -655,6 +740,8 @@ const AdminPage = () => {
   const [users, setUsers] = useState([]);
   const [fetchError, setFetchError] = useState(null);
   const [updateError, setUpdateError] = useState(null);
+  const [pendingRoles, setPendingRoles] = useState({}); // Track pending changes
+  const { userId } = usePermissions(); // Get current user's ID
 
   const fetchUsers = async () => {
     try {
@@ -662,8 +749,9 @@ const AdminPage = () => {
       const { data } = await apiClient.get('/users');
       setUsers(data);
     } catch (err) {
-      setFetchError('Failed to fetch users.');
+      setFetchError('Failed to fetch users. The backend might not be running.');
       console.error(err);
+      // In a real app, you might not want to clear users on failed refetch
     }
   };
 
@@ -671,11 +759,32 @@ const AdminPage = () => {
     fetchUsers();
   }, []);
 
-  const handleRoleChange = async (userId, newRole) => {
+  // Update local state, don't call API
+  const handleRoleSelect = (selectedUserId, newRole) => {
+    setPendingRoles(prev => ({
+      ...prev,
+      [selectedUserId]: newRole,
+    }));
+  };
+
+  // Call API to save changes
+  const handleSaveRole = async (selectedUserId) => {
+    const newRole = pendingRoles[selectedUserId];
+    if (!newRole) return;
+  
     try {
       setUpdateError(null);
-      await apiClient.put(`/users/${userId}/role`, { role: newRole });
-      fetchUsers();
+      await apiClient.put(`/users/${selectedUserId}/role`, { role: newRole });
+      
+      // On success, clear the pending state for this user
+      setPendingRoles(prev => {
+        const newPending = { ...prev };
+        delete newPending[selectedUserId];
+        return newPending;
+      });
+      
+      // Refetch all users to confirm the change from the server
+      fetchUsers(); 
     } catch (err) {
       setUpdateError('Failed to update role.');
       console.error(err);
@@ -687,7 +796,7 @@ const AdminPage = () => {
   }
 
   return (
-    <div className="max-w-4xl mx-auto bg-white/10 dark:bg-black/10 p-8 rounded-2xl shadow-2xl border border-white/20 dark:border-white/10 backdrop-blur-lg">
+    <div className="max-w-4xl mx-auto bg-white dark:bg-black/10 p-8 rounded-2xl shadow-2xl border border-gray-200 dark:border-white/10 dark:backdrop-blur-lg">
       <h2 className="text-3xl font-bold mb-6 text-gray-900 dark:text-gray-100">User Management</h2>
       
       {updateError && (
@@ -699,27 +808,150 @@ const AdminPage = () => {
       <div className="overflow-x-auto">
         <table className="w-full table-auto min-w-max">
           <thead>
-            <tr className="bg-slate-500/10 dark:bg-slate-800/20 text-left text-gray-700 dark:text-gray-300 uppercase text-sm">
+            <tr className="bg-gray-100 dark:bg-slate-800/20 text-left text-gray-700 dark:text-gray-300 uppercase text-sm">
               <th className="px-6 py-3 font-semibold">Username</th>
               <th className="px-6 py-3 font-semibold">Role</th>
               <th className="px-6 py-3 font-semibold">Actions</th>
             </tr>
           </thead>
-          <tbody className="text-gray-800 dark:text-gray-200">
-            {users.map((user) => (
-              <tr key={user._id} className="border-b border-white/10 dark:border-white/5 hover:bg-slate-500/5 dark:hover:bg-slate-800/10">
-                <td className="px-6 py-4">{user.username}</td>
-                <td className="px-6 py-4">{user.role}</td>
+          <tbody className="text-gray-900 dark:text-gray-200">
+            {users.map((user) => {
+              const hasPendingChange = pendingRoles[user._id] && pendingRoles[user._id] !== user.role;
+              
+              return (
+                <tr key={user._id} className="border-b border-gray-200 dark:border-white/5 hover:bg-gray-50 dark:hover:bg-slate-800/10">
+                  <td className="px-6 py-4">{user.username}</td>
+                  <td className="px-6 py-4">{user.role}</td>
+                  <td className="px-6 py-4">
+                    {user._id === userId ? (
+                      <span className="font-medium text-gray-700 dark:text-gray-400">Admin (You)</span>
+                    ) : (
+                      <div className="flex items-center space-x-2">
+                        <select
+                          value={pendingRoles[user._id] || user.role}
+                          onChange={(e) => handleRoleSelect(user._id, e.target.value)}
+                          className="px-3 py-2 border border-gray-300 dark:border-white/10 rounded-lg bg-white dark:bg-black/20 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-300"
+                        >
+                          {Object.values(ROLES).map((role) => (
+                            <option key={role} value={role}>{role}</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => handleSaveRole(user._id)}
+                          disabled={!hasPendingChange}
+                          className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-green-600 hover:bg-green-700 disabled:bg-gray-400/50 dark:disabled:bg-gray-700 disabled:cursor-not-allowed transition-all"
+                        >
+                          Save
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+// New Component for Audit Log
+const AuditLogPage = () => {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchLogs = async () => {
+      try {
+        setError(null);
+        setLoading(true);
+        // This endpoint doesn't exist, so it will fail.
+        // In a real app, this would return the audit logs.
+        const { data } = await apiClient.get('/audit-logs');
+        setLogs(data);
+      } catch (err) {
+        setError('Failed to fetch audit logs. Displaying mock data for demonstration.');
+        console.error(err);
+        // Load mock data on failure to demonstrate UI
+        setLogs(MOCK_AUDIT_LOGS);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLogs();
+  }, []);
+
+  const formatTimestamp = (isoString) => {
+    return new Date(isoString).toLocaleString();
+  };
+
+  // Helper function to render the log details
+  const renderLogDetails = (log) => {
+    switch (log.type) {
+      case 'ROLE_CHANGE':
+        return (
+          <>
+            Changed <span className="font-semibold text-blue-600 dark:text-blue-400">{log.targetUsername}</span>'s role from
+            <span className="font-semibold text-red-600 dark:text-red-400"> {log.oldRole} </span> to
+            <span className="font-semibold text-green-600 dark:text-green-400"> {log.newRole}</span>.
+          </>
+        );
+      case 'USER_LOGIN':
+        return (
+          <>
+            User <span className="font-semibold text-blue-600 dark:text-blue-400">{log.targetUsername}</span> logged in.
+          </>
+        );
+      case 'USER_REGISTER':
+        return (
+          <>
+            New user <span className="font-semibold text-green-600 dark:text-green-400">{log.targetUsername}</span> registered.
+          </>
+        );
+      default:
+        return <span className="text-gray-500">Unknown log event</span>;
+    }
+  };
+
+  if (loading) {
+    return <div className="text-center text-gray-800 dark:text-gray-400">Loading logs...</div>;
+  }
+
+  // Sort logs by date and get top 5
+  const sortedLogs = logs
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+    .slice(0, 5);
+
+  return (
+    <div className="max-w-4xl mx-auto bg-white dark:bg-black/10 p-8 rounded-2xl shadow-2xl border border-gray-200 dark:border-white/10 dark:backdrop-blur-lg">
+      <h2 className="text-3xl font-bold mb-6 text-gray-900 dark:text-gray-100">Audit Log (Top 5 Recent)</h2>
+      
+      {error && (
+        <p className="text-yellow-700 dark:text-yellow-400 text-center mb-4 bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-400 dark:border-yellow-600 p-3 rounded-lg">
+          {error}
+        </p>
+      )}
+
+      <div className="overflow-x-auto">
+        <table className="w-full table-auto min-w-max">
+          <thead>
+            <tr className="bg-gray-100 dark:bg-slate-800/20 text-left text-gray-700 dark:text-gray-300 uppercase text-sm">
+              <th className="px-6 py-3 font-semibold">Timestamp</th>
+              <th className="px-6 py-3 font-semibold">Actor</th>
+              <th className="px-6 py-3 font-semibold">Action Details</th>
+            </tr>
+          </thead>
+          <tbody className="text-gray-900 dark:text-gray-200">
+            {sortedLogs.map((log) => (
+              <tr key={log._id} className="border-b border-gray-200 dark:border-white/5 hover:bg-gray-50 dark:hover:bg-slate-800/10">
+                <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-400">{formatTimestamp(log.timestamp)}</td>
+                <td className="px-6 py-4 font-medium">
+                  {log.type === 'ROLE_CHANGE' ? log.adminUsername : log.targetUsername}
+                </td>
                 <td className="px-6 py-4">
-                  <select
-                    value={user.role}
-                    onChange={(e) => handleRoleChange(user._id, e.target.value)}
-                    className="px-3 py-2 border border-white/30 dark:border-white/10 rounded-lg bg-white/20 dark:bg-black/20 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-300"
-                  >
-                    {Object.values(ROLES).map((role) => (
-                      <option key={role} value={role}>{role}</option>
-                    ))}
-                  </select>
+                  {renderLogDetails(log)}
                 </td>
               </tr>
             ))}
@@ -730,8 +962,9 @@ const AdminPage = () => {
   );
 };
 
+
 const ContentFormWrapper = ({ title, children }) => (
-  <div className="max-w-2xl mx-auto bg-white/10 dark:bg-black/10 p-8 md:p-10 rounded-2xl shadow-2xl border border-white/20 dark:border-white/10 backdrop-blur-lg">
+  <div className="max-w-2xl mx-auto bg-white dark:bg-black/10 p-8 md:p-10 rounded-2xl shadow-2xl border border-gray-200 dark:border-white/10 dark:backdrop-blur-lg">
     <h2 className="text-3xl font-bold text-center mb-8 text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-purple-600 dark:from-blue-400 dark:to-purple-500">
       {title}
     </h2>
@@ -766,23 +999,23 @@ const CreatePostPage = () => {
       <form onSubmit={handleSubmit}>
         {error && <p className="text-red-500 text-center mb-4 text-sm">{error}</p>}
         <div className="mb-4">
-          <label className="block text-gray-800 dark:text-gray-200 mb-2 font-medium" htmlFor="title">Title</label>
+          <label className="block text-gray-900 dark:text-gray-200 mb-2 font-medium" htmlFor="title">Title</label>
           <input
             type="text"
             id="title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full px-4 py-2.5 bg-white/20 dark:bg-black/20 border border-white/30 dark:border-white/10 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-300 transition-all"
+            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-300 transition-all"
           />
         </div>
         <div className="mb-6">
-          <label className="block text-gray-800 dark:text-gray-200 mb-2 font-medium" htmlFor="body">Body</label>
+          <label className="block text-gray-900 dark:text-gray-200 mb-2 font-medium" htmlFor="body">Body</label>
           <textarea
             id="body"
             rows="10"
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            className="w-full px-4 py-2.5 bg-white/20 dark:bg-black/20 border border-white/30 dark:border-white/10 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-300 transition-all"
+            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-300 transition-all"
           />
         </div>
         <button
@@ -837,7 +1070,7 @@ const EditPostPage = () => {
   };
 
   if (loading) {
-    return <div className="text-center text-gray-600 dark:text-gray-400">Loading post...</div>;
+    return <div className="text-center text-gray-800 dark:text-gray-400">Loading post...</div>;
   }
   
   if (error && !title) {
@@ -849,23 +1082,23 @@ const EditPostPage = () => {
       <form onSubmit={handleSubmit}>
         {error && <p className="text-red-500 text-center mb-4 text-sm">{error}</p>}
         <div className="mb-4">
-          <label className="block text-gray-800 dark:text-gray-200 mb-2 font-medium" htmlFor="title">Title</label>
+          <label className="block text-gray-900 dark:text-gray-200 mb-2 font-medium" htmlFor="title">Title</label>
           <input
             type="text"
             id="title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full px-4 py-2.5 bg-white/20 dark:bg-black/20 border border-white/30 dark:border-white/10 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-300 transition-all"
+            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-300 transition-all"
           />
         </div>
         <div className="mb-6">
-          <label className="block text-gray-800 dark:text-gray-200 mb-2 font-medium" htmlFor="body">Body</label>
+          <label className="block text-gray-900 dark:text-gray-200 mb-2 font-medium" htmlFor="body">Body</label>
           <textarea
             id="body"
             rows="10"
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            className="w-full px-4 py-2.5 bg-white/20 dark:bg-black/20 border border-white/30 dark:border-white/10 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-300 transition-all"
+            className="w-full px-4 py-2.5 bg-gray-50 dark:bg-black/20 border border-gray-300 dark:border-white/10 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-300 transition-all"
           />
         </div>
         <button
@@ -881,9 +1114,9 @@ const EditPostPage = () => {
 
 const UnauthorizedPage = () => {
   return (
-    <div className="text-center p-10 bg-white/10 dark:bg-black/10 rounded-2xl shadow-2xl max-w-lg mx-auto border border-white/20 dark:border-white/10 backdrop-blur-lg">
+    <div className="text-center p-10 bg-white dark:bg-black/10 rounded-2xl shadow-2xl max-w-lg mx-auto border border-gray-200 dark:border-white/10 dark:backdrop-blur-lg">
       <h1 className="text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-yellow-500 dark:from-red-400 dark:to-yellow-400">Access Denied</h1>
-      <p className="mt-6 text-xl text-gray-700 dark:text-gray-300">You do not have the required permissions to view this page.</p>
+      <p className="mt-6 text-xl text-gray-800 dark:text-gray-300">You do not have the required permissions to view this page.</p>
       <Link to="/" className="mt-8 inline-block bg-gradient-to-r from-blue-500 to-blue-600 text-white px-6 py-3 rounded-lg shadow-md hover:from-blue-600 hover:to-blue-700 transition-all duration-300 transform hover:scale-105">
         Go Back to Home
       </Link>
@@ -930,7 +1163,9 @@ export default function App() {
               </Route>
               
               <Route element={<ProtectedRoute allowedRoles={[ROLES.Admin]} />}>
-                <Route path="admin" element={<AdminPage />} />
+                <Route path="admin" element={<Navigate to="/admin/users" replace />} />
+                <Route path="admin/users" element={<AdminPage />} />
+                <Route path="admin/audit" element={<AuditLogPage />} />
               </Route>
 
             </Route>

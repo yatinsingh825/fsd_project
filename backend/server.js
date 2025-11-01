@@ -26,14 +26,17 @@ const PERMISSIONS = {
   [ROLES.Admin]: {
     content: ['create', 'read', 'update_all', 'delete_all'],
     users: ['read', 'update', 'delete'],
+    auditlog: ['read'], // Added permission for audit log
   },
   [ROLES.Editor]: {
     content: ['create', 'read', 'update_own', 'delete_own'],
     users: [],
+    auditlog: [],
   },
   [ROLES.Viewer]: {
     content: ['read'],
     users: [],
+    auditlog: [],
   },
 };
 
@@ -64,7 +67,6 @@ const userSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 userSchema.pre('save', async function(next) {
-  // Only hash if the password is new or has been changed
   if (this.isNew || this.isModified('password')) {
     try {
       const salt = await bcrypt.genSalt(10);
@@ -88,6 +90,25 @@ const contentSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 const Content = mongoose.model('Content', contentSchema);
+
+// --- ADD NEW SCHEMA FOR AUDIT LOG ---
+const auditLogSchema = new mongoose.Schema({
+  type: { 
+    type: String, 
+    enum: ['ROLE_CHANGE', 'USER_LOGIN', 'USER_REGISTER'], 
+    required: true 
+  },
+  actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Who did the action
+  target: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Who was affected
+  details: {
+    oldRole: String,
+    newRole: String,
+  }
+}, { timestamps: true });
+
+const AuditLog = mongoose.model('AuditLog', auditLogSchema);
+// --- END OF NEW SCHEMA ---
+
 
 // --- Utility Functions ---
 const createToken = (payload, secret, expiresIn) => {
@@ -166,6 +187,7 @@ const authorize = (action) => {
 app.post('/api/auth/register', authLimiter, [
   body('username', 'Username must be at least 3 characters long').isLength({ min: 3 }).trim().escape(),
   body('password', 'Password must be at least 6 characters long').isLength({ min: 6 }),
+  body('role', 'A valid role is required').isIn([ROLES.Editor, ROLES.Viewer]), // Validate incoming role
 ], async (req, res) => {
   
   const errors = validationResult(req);
@@ -174,14 +196,30 @@ app.post('/api/auth/register', authLimiter, [
   }
 
   try {
-    const { username, password } = req.body;
+    const { username, password, role } = req.body; // Get role from request
     let user = await User.findOne({ username });
     if (user) {
       return res.status(400).json({ message: 'User already exists.' });
     }
     
-    user = new User({ username, password, role: ROLES.Viewer });
+    // VALIDATE THE ROLE - Do not allow registering as Admin
+    if (role === ROLES.Admin && process.env.NODE_ENV !== 'test') {
+      return res.status(400).json({ message: 'Cannot register as Admin.' });
+    }
+
+    user = new User({ 
+      username, 
+      password, 
+      role: role || ROLES.Viewer // Use provided role, default to Viewer
+    });
     await user.save();
+    
+    // --- ADD AUDIT LOG ---
+    await new AuditLog({ 
+      type: 'USER_REGISTER', 
+      actor: user._id, // User is the actor
+      target: user._id  // and the target
+    }).save();
     
     sendAuthTokens(res, user);
   } catch (error) {
@@ -216,6 +254,14 @@ app.post('/api/auth/login', authLimiter, [
     }
     
     console.log(`[Login Attempt]: Password for '${username}' matched. Logging in.`);
+    
+    // --- ADD AUDIT LOG ---
+    await new AuditLog({
+      type: 'USER_LOGIN',
+      actor: user._id,
+      target: user._id
+    }).save();
+
     sendAuthTokens(res, user);
   } catch (error) {
     res.status(500).json({ message: 'Server error during login.', error: error.message });
@@ -384,24 +430,67 @@ app.put('/api/users/:id/role', authorize('users:update'), [
       return res.status(404).json({ message: 'User not found.' });
     }
     
+    const oldRole = user.role; // Store old role
     user.role = role;
     await user.save();
+
+    // --- ADD AUDIT LOG ---
+    await new AuditLog({
+      type: 'ROLE_CHANGE',
+      actor: req.user.id, // The Admin who made the change
+      target: user._id,   // The user who was changed
+      details: {
+        oldRole: oldRole,
+        newRole: user.role
+      }
+    }).save();
+    
     res.json(user);
   } catch (error) {
     res.status(500).json({ message: 'Server error.', error: error.message });
   }
 });
 
-// --- Server Start ---
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// 4. Audit Log Route
+app.get('/api/audit-logs', authenticate, authorize('auditlog:read'), async (req, res) => {
+  try {
+    const logs = await AuditLog.find()
+      .populate('actor', 'username')  // Get username of the actor
+      .populate('target', 'username') // Get username of the target
+      .sort({ createdAt: -1 })       // Newest first
+      .limit(20);                     // Get last 20 events
+
+    // Format the data to perfectly match the frontend's mock data structure
+    const formattedLogs = logs.map(log => ({
+      _id: log._id,
+      timestamp: log.createdAt,
+      type: log.type,
+      adminUsername: log.actor?.username, // Will be null if actor/target deleted
+      targetUsername: log.target?.username,
+      oldRole: log.details?.oldRole,
+      newRole: log.details?.newRole,
+    }));
+
+    res.json(formattedLogs);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error fetching audit logs.', error: error.message });
+  }
 });
+
+
+// --- Server Start ---
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
 
 // --- Database Seeding ---
 async function seedDatabase() {
   try {
     await User.deleteMany({});
     await Content.deleteMany({});
+    await AuditLog.deleteMany({}); // Clear old logs on restart
     
     const adminUser = new User({
       username: 'admin',
@@ -448,4 +537,8 @@ async function seedDatabase() {
     console.error('Error seeding database:', error.message);
   }
 }
+
+// --- ADD THIS AT THE VERY END ---
+module.exports = app;
+
 
