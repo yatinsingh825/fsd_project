@@ -802,60 +802,78 @@ const AdminPage = () => {
 };
 
 // AuditLogPage
+// AuditLogPage
 const AuditLogPage = () => {
   const [logs, setLogs] = useState([]);
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch function
+  const fetchLogs = async () => {
+    try {
+      setError(null);
+      const { data } = await apiClient.get('/audit-logs'); // calls http://localhost:5001/api/audit-logs
+      // Optional: if backend returns timestamps, convert to ISO or leave as-is
+      // Ensure newest first (backend already sorts, but just in case)
+      const sorted = Array.isArray(data) ? data.sort((a, b) => new Date(b.timestamp || b.createdAt) - new Date(a.timestamp || a.createdAt)) : [];
+      setLogs(sorted);
+      setLoading(false);
+    } catch (err) {
+      console.error('Failed to fetch audit logs', err);
+      setError(err.response?.data?.message || 'Failed to fetch audit logs.');
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchLogs = async () => {
-      try {
-        setError(null);
-        // --- MOCK DATA ---
-        const sortedLogs = MOCK_AUDIT_LOGS.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        setLogs(sortedLogs.slice(0, 5));
-
-      } catch (err) {
-        setError('Failed to fetch audit logs.');
-        console.error(err);
-      }
-    };
     fetchLogs();
+
+    // Polling interval: update every 5 seconds (tune as needed)
+    const interval = setInterval(fetchLogs, 5000);
+
+    // Cleanup on unmount
+    return () => clearInterval(interval);
   }, []);
-  
+
   const renderLogDetails = (log) => {
-    switch (log.eventType) {
-      case 'ROLE_UPDATE':
-        return `changed ${log.targetUser.username}'s role from ${log.details.from} to ${log.details.to}.`;
+    // Match your backend fields (server.js formats logs with type, adminUsername, targetUsername, oldRole, newRole)
+    switch (log.type) {
+      case 'ROLE_CHANGE':
+        return `${log.adminUsername || 'Someone'} changed ${log.targetUsername || 'a user'}'s role from ${log.oldRole || 'N/A'} to ${log.newRole || 'N/A'}.`;
       case 'USER_LOGIN':
-        return `logged in from ${log.details.ip}.`;
+        return `${log.adminUsername || log.targetUsername || 'User'} logged in.`;
       case 'USER_REGISTER':
-        return `registered a new account with role ${log.details.role}.`;
+        return `${log.adminUsername || log.targetUsername || 'User'} registered a new account.`;
       default:
-        return 'performed an unknown action.';
+        return 'Performed an action.';
     }
   };
 
   return (
-     <div className={`max-w-4xl mx-auto p-8 ${themeClasses.card}`}>
-      <h2 className={`text-center mb-6 ${themeClasses.textHeading}`}>Audit Log (Top 5 Recent)</h2>
+    <div className={`max-w-4xl mx-auto p-8 ${themeClasses.card}`}>
+      <h2 className={`text-center mb-6 ${themeClasses.textHeading}`}>Audit Log (Recent)</h2>
+
+      {loading && <p className={`${themeClasses.textMuted} text-center`}>Loading audit logs...</p>}
       {error && <p className="text-red-500 text-center mb-4 text-sm">{error}</p>}
+
       <div className="space-y-4">
         {logs.length > 0 ? logs.map(log => (
-          <div key={log._id} className="p-4 rounded-lg bg-gray-700/50">
+          <div key={log._id || log.id} className="p-4 rounded-lg bg-gray-700/50">
             <p className={themeClasses.text}>
-              <span className="font-semibold text-blue-400">{log.user.username}</span> {renderLogDetails(log)}
+              <span className="font-semibold text-blue-400">{log.adminUsername || log.targetUsername || 'System'}</span> {renderLogDetails(log)}
             </p>
             <p className={`text-sm ${themeClasses.textMuted} mt-1`}>
-              {new Date(log.timestamp).toLocaleString()}
+              {new Date(log.timestamp || log.createdAt).toLocaleString()}
             </p>
           </div>
         )) : (
-          <p className={themeClasses.textMuted}>No audit logs found.</p>
+          !loading && <p className={themeClasses.textMuted}>No audit logs found.</p>
         )}
       </div>
     </div>
   );
 };
+
 
 
 // Form Wrapper for Content
